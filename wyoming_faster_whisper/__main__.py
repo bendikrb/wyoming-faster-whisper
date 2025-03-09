@@ -11,6 +11,7 @@ from wyoming.info import AsrModel, AsrProgram, Attribution, Info
 from wyoming.server import AsyncServer
 
 from . import __version__
+from .gender_detector import GenderDetector
 from .handler import FasterWhisperEventHandler
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,6 +59,11 @@ async def main() -> None:
     parser.add_argument(
         "--initial-prompt",
         help="Optional text to provide as a prompt for the first window",
+    )
+    parser.add_argument(
+        "--detect-gender",
+        action="store_true",
+        help="Enable gender detection alongside transcription",
     )
     #
     parser.add_argument("--debug", action="store_true", help="Log DEBUG messages")
@@ -142,6 +148,11 @@ async def main() -> None:
         compute_type=args.compute_type,
     )
 
+    gender_detector = None
+    if args.detect_gender:
+        _LOGGER.debug("Loading gender detector")
+        gender_detector = GenderDetector()
+
     server = AsyncServer.from_uri(args.uri)
     _LOGGER.info("Ready")
     model_lock = asyncio.Lock()
@@ -153,6 +164,7 @@ async def main() -> None:
             whisper_model,
             model_lock,
             initial_prompt=args.initial_prompt,
+            gender_detector=gender_detector,
         )
     )
 

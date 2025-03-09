@@ -14,6 +14,8 @@ from wyoming.event import Event
 from wyoming.info import Describe, Info
 from wyoming.server import AsyncEventHandler
 
+from .gender_detector import GenderDetector
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -28,6 +30,7 @@ class FasterWhisperEventHandler(AsyncEventHandler):
         model_lock: asyncio.Lock,
         *args,
         initial_prompt: Optional[str] = None,
+        gender_detector: Optional[GenderDetector] = None,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -37,6 +40,7 @@ class FasterWhisperEventHandler(AsyncEventHandler):
         self.model = model
         self.model_lock = model_lock
         self.initial_prompt = initial_prompt
+        self.gender_detector = gender_detector
         self._language = self.cli_args.language
         self._wav_dir = tempfile.TemporaryDirectory()
         self._wav_path = os.path.join(self._wav_dir.name, "speech.wav")
@@ -64,6 +68,13 @@ class FasterWhisperEventHandler(AsyncEventHandler):
 
             self._wav_file.close()
             self._wav_file = None
+            context = {}
+
+            # Detect gender from the audio
+            if self.gender_detector:
+                gender = self.gender_detector.detect(self._wav_path)
+                _LOGGER.info(f"Detected gender: {gender}")
+                context["gender"] = gender
 
             async with self.model_lock:
                 segments, _info = self.model.transcribe(
@@ -76,7 +87,7 @@ class FasterWhisperEventHandler(AsyncEventHandler):
             text = " ".join(segment.text for segment in segments)
             _LOGGER.info(text)
 
-            await self.write_event(Transcript(text=text).event())
+            await self.write_event(Transcript(text=text, context=context).event())
             _LOGGER.debug("Completed request")
 
             # Reset
