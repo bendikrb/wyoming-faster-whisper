@@ -64,28 +64,29 @@ class FasterWhisperEventHandler(AsyncEventHandler):
                 "Audio stopped. Transcribing with initial prompt=%s",
                 self.initial_prompt,
             )
-            assert self._wav_file is not None
-
-            self._wav_file.close()
-            self._wav_file = None
             context = {}
+            text = ""
 
-            # Detect gender from the audio
-            if self.gender_detector:
-                gender = self.gender_detector.detect(self._wav_path)
-                _LOGGER.info(f"Detected gender: {gender}")
-                context["gender"] = gender
+            if self._wav_file is not None:
+                self._wav_file.close()
+                self._wav_file = None
 
-            async with self.model_lock:
-                segments, _info = self.model.transcribe(
-                    self._wav_path,
-                    beam_size=self.cli_args.beam_size,
-                    language=self._language,
-                    initial_prompt=self.initial_prompt,
-                )
+                # Detect gender from the audio
+                if self.gender_detector:
+                    gender = self.gender_detector.detect(self._wav_path)
+                    _LOGGER.info(f"Detected gender: {gender}")
+                    context["gender"] = gender
 
-            text = " ".join(segment.text for segment in segments)
-            _LOGGER.info(text)
+                async with self.model_lock:
+                    segments, _info = self.model.transcribe(
+                        self._wav_path,
+                        beam_size=self.cli_args.beam_size,
+                        language=self._language,
+                        initial_prompt=self.initial_prompt,
+                    )
+
+                text = " ".join(segment.text for segment in segments)
+                _LOGGER.info(text)
 
             await self.write_event(Transcript(text=text, context=context).event())
             _LOGGER.debug("Completed request")
